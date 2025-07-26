@@ -1,115 +1,184 @@
-import Image from "next/image";
-import { Geist, Geist_Mono } from "next/font/google";
+import { useEffect, useState, useRef } from "react";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+export default function index() {
+  const [selectedCharacter, setSelectedCharacter] = useState(null);
+  const [selectedTone, setSelectedTone] = useState(null);
+  const [userAvatar, setUserAvatar] = useState("");
+  const [botAvatar, setBotAvatar] = useState("");
+  const [chatStarted, setChatStarted] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [inputValue, setInputValue] = useState("");
+  const chatRef = useRef(null);
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+  useEffect(() => {
+    const fetchRandomAvatar = async () => {
+      const res = await fetch("https://randomuser.me/api/?gender=male");
+      const data = await res.json();
+      return data.results[0].picture.medium;
+    };
 
-export default function Home() {
+    (async () => {
+      setUserAvatar(await fetchRandomAvatar());
+      setBotAvatar(await fetchRandomAvatar());
+    })();
+  }, []);
+
+  useEffect(() => {
+    chatRef.current?.scrollTo(0, chatRef.current.scrollHeight);
+  }, [messages]);
+
+  const startConversation = async () => {
+    if (!selectedCharacter || !selectedTone) {
+      alert("Lütfen hem karakteri hem de üslubu seçin.");
+      return;
+    }
+
+    await fetch("api/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ character: selectedCharacter, tone: selectedTone }),
+    });
+
+    setChatStarted(true);
+    setMessages([{ type: "bot", text: "Selam!", avatar: botAvatar }]);
+  };
+
+  const sendMessage = async () => {
+    const trimmed = inputValue.trim();
+    if (!trimmed) return;
+
+    setMessages(prev => [
+      ...prev,
+      { type: "user", text: trimmed, avatar: userAvatar },
+      { type: "bot", text: "typing", avatar: botAvatar },
+    ]);
+
+    setInputValue("");
+
+    try {
+      const res = await fetch("api/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: trimmed }),
+      });
+      const data = await res.json();
+
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          type: "bot",
+          text: data.reply,
+          avatar: botAvatar,
+        };
+        return updated;
+      });
+    } catch {
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          type: "bot",
+          text: "Bir hata oluştu. Lütfen tekrar deneyin.",
+          avatar: botAvatar,
+        };
+        return updated;
+      });
+    }
+  };
+
   return (
-    <div
-      className={`${geistSans.className} ${geistMono.className} font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20`}
-    >
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/pages/index.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="font-inter bg-[#15171c] text-[#e3e3e3] min-h-screen">
+      {!chatStarted ? (
+        <div className="max-w-[430px] mx-auto mt-14 bg-gradient-to-br from-[#23242b] to-[#232b3a] rounded-[28px] shadow-[0_8px_32px_#000b] p-10 text-center border border-[#2c2d36] relative overflow-hidden">
+          <h1 className="text-white text-[2.3rem] font-extrabold mb-2">Tebliğ Simülatör</h1>
+          <h3 className="text-[#bfc6d5] text-[1.15rem] mb-6">Farklı inançlara sahip insanlarla tebliğ pratiği yap!</h3>
+
+          <h3 className="text-[#4f8cff] font-semibold text-[1.08rem] mb-2 mt-4">Tebliğ yapacağın kişiyi seç:</h3>
+          <div className="flex flex-wrap justify-center gap-3 mb-2">
+            {["ateist", "hristiyan", "budist", "deist"].map(type => (
+              <button
+                key={type}
+                onClick={() => setSelectedCharacter(type)}
+                className={`px-5 py-2 rounded-lg border font-semibold ${
+                  selectedCharacter === type
+                    ? "bg-gradient-to-r from-[#2e3240] to-[#4f8cff33] text-[#4f8cff] border-[#4f8cff]"
+                    : "bg-[#23242b] text-[#e3e3e3] border-[#35363c]"
+                }`}
+              >
+                👤 {type}
+              </button>
+            ))}
+          </div>
+
+          <h3 className="text-[#4f8cff] font-semibold text-[1.08rem] mb-2 mt-4">Bu kişinin üslubunu seç:</h3>
+          <div className="flex flex-wrap justify-center gap-3">
+            {["agresif", "sakin", "meraklı", "orali_olmayan"].map(tone => (
+              <button
+                key={tone}
+                onClick={() => setSelectedTone(tone)}
+                className={`px-5 py-2 rounded-lg border font-semibold ${
+                  selectedTone === tone
+                    ? "bg-gradient-to-r from-[#2e3240] to-[#4f8cff33] text-[#4f8cff] border-[#4f8cff]"
+                    : "bg-[#23242b] text-[#e3e3e3] border-[#35363c]"
+                }`}
+              >
+                💬 {tone.replace("_", " ")}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={startConversation}
+            className="mt-6 w-full py-3 rounded-xl text-white font-bold bg-gradient-to-r from-[#4f8cff] to-[#2563eb] hover:scale-[1.03] transition-transform"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            Sohbete Başla
+          </button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      ) : (
+        <>
+          <div
+            ref={chatRef}
+            className="max-w-[480px] mx-auto mt-8 p-6 bg-[#1a1c22] rounded-[20px] shadow-lg border border-[#23242b] max-h-[65vh] overflow-y-auto"
+          >
+            {messages.map((msg, i) => (
+              <div
+                key={i}
+                className={`flex mb-3 items-end ${
+                  msg.type === "user" ? "flex-row-reverse ml-auto" : "mr-auto"
+                }`}
+              >
+                <img src={msg.avatar} className="w-10 h-10 rounded-full border-2 border-[#35363c] shadow mr-2" />
+                <span className="bg-gradient-to-r from-[#23242b] to-[#1a1c22] px-4 py-3 rounded-xl border border-[#35363c] text-sm">
+                  {msg.text === "typing" ? (
+                    <span className="flex gap-1">
+                      <span className="w-2 h-2 bg-[#bfc6d5] rounded-full animate-bounce"></span>
+                      <span className="w-2 h-2 bg-[#bfc6d5] rounded-full animate-bounce delay-200"></span>
+                      <span className="w-2 h-2 bg-[#bfc6d5] rounded-full animate-bounce delay-400"></span>
+                    </span>
+                  ) : (
+                    msg.text
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="max-w-[480px] mx-auto mt-4 flex gap-3 px-2 pb-8">
+            <input
+              value={inputValue}
+              onChange={e => setInputValue(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && sendMessage()}
+              className="flex-grow px-4 py-3 rounded-xl bg-[#23242b] text-[#e3e3e3] border border-[#35363c] focus:outline-none focus:border-[#4f8cff]"
+              placeholder="Mesaj"
+            />
+            <button
+              onClick={sendMessage}
+              className="px-5 py-3 rounded-xl text-white font-semibold bg-gradient-to-r from-[#4f8cff] to-[#2563eb] hover:scale-[1.04] transition-transform"
+            >
+              Gönder
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
